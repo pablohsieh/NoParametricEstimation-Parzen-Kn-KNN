@@ -1,4 +1,4 @@
-# NoParametricEstimation-Parzen-Kn-KNN
+# NonParametricEstimation-Parzen-Kn-KNN
 
 Teoría de Estimación y Codificación - FIUBA
 
