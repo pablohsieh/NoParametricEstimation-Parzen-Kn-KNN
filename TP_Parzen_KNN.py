@@ -21,29 +21,7 @@ def gaussiana(x,mu,sigma):
 #Para el caso del error se usa mu=0, sigma=1
     return (np.exp( (-(x-mu)**2)/(2*sigma**2)))*(1/(np.sqrt(2*np.pi)*sigma))
 
-#def muestras_gauss(n,m,s):
-#    muestra = np.zeros(n)
-#    for i in range(n):
-#        muestra[i] = np.random.normal(mu,sigma,1)
-#    return muestra
-
-# Error ----------------------------------------------------------------------
-#def mahalanobis_distance(d,x,y,cov_xy): #distancia de mahalanobis entre x e y
-#    a = x - y
-#    if d ==1: #caso escalar
-#        b = 1/cov_xy
-#    else: #caso de dimension > 1
-#        b = np.linalg.inv(cov_xy)
-#    r = np.dot(a,np.dot(a,b))
-#    return np.sqrt(r)
-
-#def p_error(lim_inf): # Probabilidad de error integrando pdf gaussiana
-# el lim inferior es la dist mahalanobis/2
-#    return quad(gaussiana,lim_inf,np.inf,args=(0,1))
-
-            
-
-        
+                
 # Estimaciones ---------------------------------------------------------------
 def ventana(x,h):
 # Ventana rectangular que cumple pdf
@@ -60,46 +38,37 @@ def window(x):
     else:
         return 0
     
-def window_gauss(x,h):
+def window_gauss(x,h,desvio):
 # Ventana gaussiana de media 0 y varianza sigma
 # La media es 0 porque si no lo fuera entonces la ventana estaria en cualquier lugar
 # Una gaussiana en 3sigma cae a casi 0, se podria usar 4sigma tambien  
 # Necesito que la gaussiana este dentro de la ventana de long h, por eso
 # 4*sigma = h/2 => sigma = h/8  
     #sigma = h/6
-    sigma = h/8    
+    sigma = h/(2*desvio)    
     if np.abs(x) <= np.abs(1/2):
         return gaussiana(x,0,sigma)
     else:
         return 0
 
-def select_window(gauss,x,h):
+def select_window(gauss,x,h,desvio):
     if gauss == 1:
-        return window_gauss(x,h)
+        return window_gauss(x,h,desvio)
     else:
         return window(x)
 
 
-def estimacion_parzen(muestras,soporte,h,gauss):
+def estimacion_parzen(muestras,soporte,h,gauss,desvio):
 # pdf estimada en 1d
     N = len(muestras)
     p_hat = np.zeros(len(soporte))
     for x in range(len(soporte)):
         for x_i in muestras:
             #p_hat[x] = p_hat[x] + window((soporte[x]-x_i)/h)/h
-            p_hat[x] = p_hat[x] + select_window( gauss, (soporte[x]-x_i)/h , h)/h
+            p_hat[x] = p_hat[x] + select_window( gauss, (soporte[x]-x_i)/h , h, desvio)/h
         p_hat[x] = p_hat[x]/N
     return p_hat
 
-#def parzen_estimate(muestras,soporte,h):
- #   N = len(muestras)
-  #  estimate = []
-   # for x in soporte:
-    #    sum = 0
-     #   for x_i in muestras:
-      #      sum = sum + window((x-x_i)/h)/h
-       # estimate.append(sum/N)
-    #return estimate
     
 def vol_k_vecinos(muestras,k,x):
 # Obtengo los k vecinos mas cercanos a x
@@ -151,6 +120,7 @@ def agregar_dist_clase(muestra,clase,x):
     
     return aux
 
+
 def es_clase_a_KNN(muestra_a,muestra_b,x,k):
 # obtengo array de distancias ordenadas por cercania a x y clase(0 o 1)
     dist_x_a = agregar_dist_clase(muestra_a,0,x)
@@ -165,11 +135,10 @@ def es_clase_a_KNN(muestra_a,muestra_b,x,k):
 # cuento la cantidad de k vecinos de clase = 1, es decir clase b
     suma = sum(clases[0:k])
     if suma >= np.floor(k/2): # si tengo muchos 1 es porque es de clase b
-        return 0 # no es de clase a, devuelvo un 0
+        return 1 # no es de clase a, devuelvo un 1
     else: # suma < k/2, o sea que es de clase = 0, es decir clase a
-        return 1 # es de clase a y devuelvo 1
-
-             
+        return 0 # es de clase a y devuelvo 0
+    
     
 def sep_clases_KNN(muestra_a,muestra_b,array_muestra,k):
 # Devuelvo dos arrays, uno con las muestras de la clase a y otro de la b por regla KNN
@@ -178,13 +147,25 @@ def sep_clases_KNN(muestra_a,muestra_b,array_muestra,k):
 #    print(array_muestra[0])
     for i in range(len(array_muestra)):
         aux = es_clase_a_KNN(muestra_a,muestra_b,array_muestra[i],k)
-        if aux == 1: #array_muestra[i] es de clase a
+        if aux == 0: #array_muestra[i] es de clase a
             array_clase_a = np.append(array_clase_a,array_muestra[i])
         else:
             array_clase_b = np.append(array_clase_b,array_muestra[i])
     return array_clase_a,array_clase_b
-    
 
+
+def sep_clases_agregar_col_KNN(muestra_a,muestra_b,array_muestra,k):
+# Devuelvo array_muestra con una columna extra con la clasificacion obtenida
+    array_clasif = np.zeros(0)
+    for i in range(len(array_muestra)):
+       # print(array_muestra)
+        clase = es_clase_a_KNN(muestra_a,muestra_b,array_muestra[i][0],k)
+        #print(clase)
+        array_clasif = np.append(array_clasif,clase)
+
+    aux = np.column_stack((array_muestra,array_clasif))
+
+    return aux
 
 
 # CLASIFICADOR DICOTOMICO ----------------------------------------------------
@@ -195,56 +176,45 @@ def es_clase_a(p_priori_a,p_estimada_a,p_priori_b,p_estimada_b,muestra,soporte):
     p_b = p_priori_b*f(soporte,p_estimada_b,muestra)
     #g = p_a - p_b
     if p_a > p_b: # es de clase a
-        return 1
-    else: #es de clase b
         return 0
+    else: #es de clase b
+        return 1
         
 def sep_clases(p_priori_a,p_estimada_a,p_priori_b,p_estimada_b,array_muestra,soporte):
 # Devuelvo dos arrays, uno con las muestras de la clase a y otro de la b
     array_clase_a = np.zeros(0)
     array_clase_b = np.zeros(0)
-#    print(array_muestra[0])
     for i in range(len(array_muestra)):
         aux = es_clase_a(p_priori_a,p_estimada_a,p_priori_b,p_estimada_b,array_muestra[i],soporte)
-        if aux == 1: #array_muestra[i] es de clase a
+        if aux == 0: #array_muestra[i] es de clase a
             array_clase_a = np.append(array_clase_a,array_muestra[i])
         else:
             array_clase_b = np.append(array_clase_b,array_muestra[i])
     return array_clase_a,array_clase_b
+
+def sep_clases_agregar_col(p_priori_a,p_estimada_a,p_priori_b,p_estimada_b,array_muestra,soporte):
+# Devuelvo array_muestra con una columna extra con la clasificacion obtenida
+    array_clasif = np.zeros(0)
+    for i in range(len(array_muestra)):
+        clase = es_clase_a(p_priori_a,p_estimada_a,p_priori_b,p_estimada_b,array_muestra[i][0],soporte)
+        array_clasif = np.append(array_clasif,clase)
+
+    aux = np.column_stack((array_muestra,array_clasif))
+
+    return aux
         
 
-# Realizacion de graficos
+def agregar_clase(array,clase):
+# Agrego una columna extra con la clase de la muestra
+    N = len(array)
+    if clase == 1:
+        clase = np.ones(N) 
+    elif clase == 0:
+        clase = np.zeros(N)   
+    aux = np.column_stack((array,clase))   
+    return aux
 
-#def graficar(x_p_hat,p_hat,x_p_teo,p_teo):
-#    plt.plot(x_p_hat,p_hat,color='b',linestyle='dashed',linewidth=1.25,label='Parzen')
-    #plt.bar(x_p_hat,p_hat,color='b',align='center',alpha = 0.25 ,label='Parzen barras')
-#    plt.plot(x_p_teo,p_teo,color='r',linestyle='solid',linewidth=1.25,label='Teórica')
-#    plt.xlabel('soporte')
-#    plt.ylabel('pdf estimada')
-#    plt.xticks(x) 
-#    plt.grid()
-#    plt.legend()
-#    plt.show()
-    
- 
-#def graf_test(x,y):
-#    plt.plot(x,y,color='b',linestyle='dashed',linewidth=1)
-#    plt.xlabel('x')
-#    plt.ylabel('y')
-#    plt.xticks(x) 
-#    plt.grid()
-#    plt.legend()
-#    plt.show()
 
-#def graf_test_2(x,y,z):
-#    plt.plot(x,y,color='b',linestyle='dashed',linewidth=1,label='1er arg')
-#    plt.plot(x,z,color='r',linestyle='solid',linewidth=1,label='2do arg')
-#    plt.xlabel('x')
-#    plt.ylabel('y')
-#    plt.xticks(x) 
-#    plt.grid()
-#    plt.legend()
-#    plt.show()
 
 def graf_histograma(muestras_1,label_1,muestras_2,label_2,n,mu_1,mu_2):
     fig = plt.figure()
@@ -273,57 +243,8 @@ def graf(soporte,p_F1,p_F2,p_teo_F1,p_teo_F2,label,h_k):
     plt.show()
     return fig
 
-#def graf_muestras_clasif(soporte,p_F1,p_F2,muestras_F1,muestras_F2):#,label,h_k):
-# muestras_F1 y muestras_F2 son las muestras clasificadas en clase F1 y F2
-#    fig = plt.figure()
-#    plt.plot(soporte,p_F1,color='b',linestyle='dashed',linewidth=1.25,label='F1 estimada')
-#    plt.plot(soporte,p_F2,color='r',linestyle='dashed',linewidth=1.25,label='F2 estimada')
-#    plt.plot(muestras_F1,len(muestras_F1)*[0],'bx',linewidth=1,label='clase F1')
-#    plt.plot(muestras_F2,len(muestras_F2)*[0],'r.',linewidth=1,label='clase F2')
-#    plt.xlabel('Soporte')
-#    plt.ylabel('pdf estimada')
-#    plt.title('Distribuciones estimadas y muestras clasificadas.\n')#+label+str(h_k))
-#    plt.grid()
-#    plt.legend()
-#    plt.show()
-#    return fig
-
-
-#graf_puntos_clasif(sample_F1_test,sample_F2_test,test_clase_1_F1,test_clase_2_F1,test_clase_1_F2,test_clase_2_F2,label_title)
-
 
 def graf_puntos_clasif(real_F1,real_F2,clas1_F1,clas2_F1,clas1_F2,clas2_F2,label_title): 
-#def graf_puntos_clasif(real_F1,real_F2,clas1_F1,clas2_F1,clas1_F2,clas2_F2,n_test,error_F1,error_F2,label_estimacion,h_k):
-    F_M = 2
-    #F1 = 1
-    #F2 = 4
-    F1_clasif = 0
-    F2_clasif = 1 
-    
-    fig = plt.figure()
-    plt.plot(clas1_F1,len(clas1_F1)*[F1_clasif],'bx',linewidth=1,label='clase F1')
-    plt.plot(clas2_F1,len(clas2_F1)*[F1_clasif],'r.',linewidth=1,label='clase F2')
-    plt.plot(real_F1,len(real_F1)*[F_M],'bx',linewidth=1)#,label='Real F1')
-    plt.plot(clas1_F2,len(clas1_F2)*[F2_clasif],'bx',linewidth=1)#,label='clase F1')
-    plt.plot(clas2_F2,len(clas2_F2)*[F2_clasif],'r.',linewidth=1)#,label='clase F2')
-    plt.plot(real_F2,len(real_F2)*[F_M],'r.',linewidth=1)#,label='Real F2')
-
-    naranja = '#f5be58'
-    plt.axhspan(F_M - 0.1, F_M + 0.1, alpha=0.35, color = naranja,label = 'Muestras a clasificar')
-#    plt.axhspan(F1 - 0.1, F1 + 0.1, alpha=0.35, color = naranja)
-#    plt.axhspan(F1 - 0.1, F1 + 0.1, alpha=0.25, color = 'b' ,label = 'Provenientes de F1')
-#    plt.axhspan(F2 - 0.1, F2 + 0.1, alpha=0.25, color = 'r' ,label = 'Provenientes de F2')
-    plt.axhspan(F1_clasif - 0.1, F1_clasif + 0.1, alpha=0.15, color = 'b' ,label = 'Clasificación F1')
-    plt.axhspan(F2_clasif - 0.1, F2_clasif + 0.1, alpha=0.15, color = 'r' ,label = 'Clasificación F2')
-
-    plt.title(label_title)
-    #plt.title('Clasificación de '+str(n_test)+' muestras usando las distribuciones estimadas.\n'+label_estimacion+str(h_k)+'.\nError de clasificación: Clase F1='+str(error_clasif_F1)+', Clase F2='+str(error_clasif_F2) )#+label+str(h_k))
-    plt.grid()
-    plt.legend(loc='upper center', bbox_to_anchor=(0.5, -0.07), ncol=2)
-    plt.show()
-    return fig
-
-def graf_puntos_clasif_KNN(real_F1,real_F2,clas1_F1,clas2_F1,clas1_F2,clas2_F2,label_title): 
     fig = plt.figure()
     plt.plot(clas1_F1,len(clas1_F1)*[0],'bx',linewidth=1,label='clase F1')
     plt.plot(clas2_F1,len(clas2_F1)*[0],'r.',linewidth=1,label='clase F2')
@@ -334,21 +255,55 @@ def graf_puntos_clasif_KNN(real_F1,real_F2,clas1_F1,clas2_F1,clas1_F2,clas2_F2,l
     
     # Recuadro del muestras
     naranja = '#f5be58'
-    #plt.fill_between(np.linspace(1, 2, 2), [0] * 2, [240] * 2, color=naranja, label='CBC')
-    #plt.axvspan(-5, 5, ymin=1.9, ymax=2.1, alpha=0.5, color=naranja, label = 'Muestras')
     plt.axhspan(1.9, 2.1, alpha=0.35, color = naranja,label = 'Muestras a clasificar')
     plt.axhspan(-0.1, 0.1, alpha=0.15, color = 'b' ,label = 'Clasificación de las provenientes de F1')
     plt.axhspan(0.9, 1.1, alpha=0.15, color = 'r' ,label = 'Clasificación de las provenientes de F2')
+    
     plt.title(label_title)
-    #plt.title('Clasificación de '+str(n_test)+' muestras usando las distribuciones estimadas.\n'+label_estimacion+str(h_k)+'.\nError de clasificación: Clase F1='+str(error_clasif_F1)+', Clase F2='+str(error_clasif_F2) )#+label+str(h_k))
     plt.grid()
     plt.legend(loc='upper center', bbox_to_anchor=(0.5, -0.07), ncol=2)
     plt.show()
     return fig
 
-######################## 
-######### MAIN ######### 
-######################## 
+
+def cant_miss(muestra):
+    cant = 0
+    for i in range(len(muestra)):
+        if muestra[i][2] != muestra[i][1]:
+            cant = cant + 1
+    return cant
+
+def hacer_clasificacion(imprimir, papw1, pF1, papw2, pF2, sample_F1test, sample_F2test, soport, h_k, label_estimacion,label_impresion):
+# ---- Clasificacion
+# Utilizo las muestras de prueba para clasificar con las densidades estimadas
+#    n_test = len(sample_F1test) + len(sample_F2test)    
+
+    test_class_1_F1, test_class_2_F1 = sep_clases(papw1, pF1, papw2, pF2, sample_F1test[:,0],soport)
+    test_class_1_F2, test_class_2_F2 = sep_clases(papw1, pF1, papw2, pF2, sample_F2test[:,0],soport)
+
+    muestras_1 = sep_clases_agregar_col(papw1, pF1, papw2, pF2, sample_F1test,soport)
+    muestras_2 = sep_clases_agregar_col(papw1, pF1, papw2, pF2, sample_F2test,soport)
+    
+    cant_miss_F1 = cant_miss(muestras_1)
+    cant_miss_F2 = cant_miss(muestras_2)
+        
+    err_clasif_F1 = cant_miss_F1 / len(muestras_1) 
+    err_clasif_F2 = cant_miss_F2 / len(muestras_2) 
+    
+    err_clasif_F1 = round(err_clasif_F1, 4)
+    err_clasif_F2 = round(err_clasif_F2, 4)
+    
+    label_titulo = str('Clasificación de ')+str(n_test)+str(' muestras usando las distribuciones estimadas.\n')+label_estimacion+str(h_k)+str('.\nError de clasificación: Clase F1=')+str(err_clasif_F1)+str(', Clase F2=')+str(err_clasif_F2)
+
+    fig_graf = graf_puntos_clasif(sample_F1test[:,0],sample_F2test[:,0],test_class_1_F1,test_class_2_F1,test_class_1_F2,test_class_2_F2,label_titulo)
+    if imprimir == 1:
+        output_filename = 'fig_d-Muestras-Clasif-' + label_impresion + '.png'
+        fig_graf.savefig(output_filename,bbox_inches='tight')
+ 
+
+##############################################################################   
+######### MAIN ###############################################################   
+##############################################################################  
 
 
 pap_w1 = 0.4
@@ -359,14 +314,17 @@ F1_sigma = 4
 F2_mu = 4
 F2_sigma = 4
 
-#n=10**4
-n=100
-n_test=10
+n=10**4
+n_test=10**2
+#n=100
+#n_test=10
+
+imprimir = 0
 
 label_F1 = str('Normal(1,4)')
 label_F2 = str('Normal(4,4)')
 label_parzen = str('Estimación utilizando ventanas de Parzen')
-label_window_gauss = str(', Gaussiana(0,h/8) h=')
+#label_window_gauss = str(', Gaussiana(0,h/4) h=')
 label_window_rect = str(', Rectangular h=')
 label_kn = str('Estimación utilizando Kn vecinos más cercanos, k= ')
 #x=np.zeros(n)
@@ -377,96 +335,109 @@ sample_F1 = np.random.normal(F1_mu,F1_sigma,n)
 sample_F2 = np.random.normal(F2_mu,F2_sigma,n)
 
 # Generacion de muestras a clasificar
-sample_F1_test = np.random.normal(F1_mu,F1_sigma,n_test)
-sample_F2_test = np.random.normal(F2_mu,F2_sigma,n_test)
+#sample_F1_test = np.random.normal(F1_mu,F1_sigma,n_test)
+#sample_F2_test = np.random.normal(F2_mu,F2_sigma,n_test)
 
-#s_F1 = sample_F1 * pap_w1 
-#s_F2 = sample_F2 * pap_w2 
-#px = p_x_w1 * pap_w1 + p_x_w2 * pap_w2 
-#fig_graf = graf_histograma(s_F1, label_F1, s_F2, label_F2,n)
+sample_F1_test = np.random.normal(F1_mu,F1_sigma,40)
+sample_F2_test = np.random.normal(F2_mu,F2_sigma,60)
+
+sample_F1_test = agregar_clase(sample_F1_test,0)
+sample_F2_test = agregar_clase(sample_F2_test,1)
 
 
 fig_graf = graf_histograma(sample_F1, label_F1, sample_F2, label_F2,n,F1_mu,F2_mu)
-#fig_graf.savefig('fig_a-Histograma.png',bbox_inches='tight')
+if imprimir == 1:
+    fig_graf.savefig('fig_a-Histograma.png',bbox_inches='tight')
 
-#h = math.ceil(np.sqrt(len(n)))
-h = 1
 
 # El soporte va a ser 0 para valores menores a (muestra_min - h/2) y mayores a
 # (muestra_min + h/2)
 # Para el ejercicio son dos gaussianas de varianza 4 y media 1 y 4, no deberia
 # tener nada fuera de un soporte (-15;20)
-soporte_minimo =  np.floor(min(sample_F1)-h/2)
-soporte_maximo = np.ceil(max(sample_F2)+h/2)
-soporte = np.arange(soporte_minimo,soporte_maximo,step=0.1) 
-# con step=0.1 tarda casi 8 minutos
+soporte_minimo = -15
+soporte_maximo = 20
+#soporte_minimo =  np.floor(min(sample_F1)-h/2)
+#soporte_maximo = np.ceil(max(sample_F2)+h/2)
+soporte = np.arange(soporte_minimo,soporte_maximo,step=0.1)
 
+
+h = np.array([115/np.sqrt(n), #h=1.15
+              100/np.sqrt(n), #h=1
+              80/np.sqrt(n),  #h=0.8
+              50/np.sqrt(n),  #h=0.5
+              25/np.sqrt(n)]) #h=0.25
+    
+    
+for i in range(len(h)):
 # PARZEN ---- Estimacion con ventana GAUSSIANA ------ PARZEN ------- PARZEN --
-p_F1 = estimacion_parzen(sample_F1,soporte,h,1)
-p_F2 = estimacion_parzen(sample_F2,soporte,h,1)
+
+##### sigma = h/4
+    label_window_gauss = str(', Gaussiana(0,h/4) h=')
+    label_imprimir = 'Parzen_winGauss(sigma=h4)_h=' + str(h[i]) 
+        
+    p_F1 = estimacion_parzen(sample_F1,soporte,h[i],1,2)
+    p_F2 = estimacion_parzen(sample_F2,soporte,h[i],1,2)
+
+    fig_graf = graf(soporte,p_F1,p_F2,gaussiana(soporte,F1_mu,F1_sigma),gaussiana(soporte,F2_mu,F2_sigma),label_parzen+label_window_gauss,h[i])
+    if imprimir == 1:
+        output_filename = 'fig_b-' + label_imprimir + '.png'
+        fig_graf.savefig(output_filename,bbox_inches='tight')
+        
+# ---- Clasificacion
+    label_estimacion = label_parzen+label_window_gauss
+    hacer_clasificacion(imprimir,pap_w1, p_F1, pap_w2, p_F2, sample_F1_test, sample_F2_test, soporte, h[i], label_estimacion, label_imprimir)
 
 
-fig_graf = graf(soporte,p_F1,p_F2,gaussiana(soporte,F1_mu,F1_sigma),gaussiana(soporte,F2_mu,F2_sigma),label_parzen+label_window_gauss,h)
-output_filename = 'fig_b-Parzen_winGauss_h=' + str(h) + '.png'
-#fig_graf.savefig(output_filename,bbox_inches='tight')
+##### sigma = h/2
+    label_window_gauss = str(', Gaussiana(0,h/2) h=')
+    label_imprimir = 'Parzen_winGauss(sigma=h2)_h=' + str(h[i]) 
+        
+    p_F1 = estimacion_parzen(sample_F1,soporte,h[i],1,1)
+    p_F2 = estimacion_parzen(sample_F2,soporte,h[i],1,1)
 
-
-#fig_graf = graf_muestras_clasif(soporte,p_F1,p_F2,sample_F1_test,sample_F2_test)
-#output_filename = 'fig_d-Clasif-Parzen-winGauss_h=' + str(h) + '.png'
-#fig_graf.savefig(output_filename,bbox_inches='tight')
+    fig_graf = graf(soporte,p_F1,p_F2,gaussiana(soporte,F1_mu,F1_sigma),gaussiana(soporte,F2_mu,F2_sigma),label_parzen+label_window_gauss,h[i])
+    if imprimir == 1:
+        output_filename = 'fig_b-' + label_imprimir + '.png'
+        fig_graf.savefig(output_filename,bbox_inches='tight')
 
 # ---- Clasificacion
 # Utilizo las muestras de prueba para clasificar con las densidades estimadas
-test_clase_1_F1, test_clase_2_F1 = sep_clases(pap_w1, p_F1, pap_w2, p_F2, sample_F1_test,soporte)
-test_clase_1_F2, test_clase_2_F2 = sep_clases(pap_w1, p_F1, pap_w2, p_F2, sample_F2_test,soporte)
-
-error_clasif_F1 = len(test_clase_2_F1) / n_test
-error_clasif_F2 = len(test_clase_1_F2) / n_test
+    label_estimacion = label_parzen+label_window_gauss
+    hacer_clasificacion(imprimir,pap_w1, p_F1, pap_w2, p_F2, sample_F1_test, sample_F2_test, soporte, h[i], label_estimacion, label_imprimir)
 
 
-label_title = str('Clasificación de ')+str(n_test)+str(' muestras usando las distribuciones estimadas.\n')+label_parzen+label_window_gauss+str(h)+str('.\nError de clasificación: Clase F1=')+str(error_clasif_F1)+str(', Clase F2=')+str(error_clasif_F2)
+##### sigma = h/8
+    label_window_gauss = str(', Gaussiana(0,h/8) h=')
+    label_imprimir = 'Parzen_winGauss(sigma=h8)_h=' + str(h[i])  
+    
+    p_F1 = estimacion_parzen(sample_F1,soporte,h[i],1,4)
+    p_F2 = estimacion_parzen(sample_F2,soporte,h[i],1,4)
 
-#fig_graf = graf_puntos_clasif(sample_F1_test,sample_F2_test,test_clase_1_F1,test_clase_2_F1,test_clase_1_F2,test_clase_2_F2,n_test,error_clasif_F1,error_clasif_F2,label_parzen+label_window_gauss,h)
-fig_graf = graf_puntos_clasif(sample_F1_test,sample_F2_test,test_clase_1_F1,test_clase_2_F1,test_clase_1_F2,test_clase_2_F2,label_title)
-output_filename = 'fig_d-Muestras-Clasif-Parzen-winGauss_h=' + str(h) + '.png'
-#fig_graf.savefig(output_filename,bbox_inches='tight')
+    fig_graf = graf(soporte,p_F1,p_F2,gaussiana(soporte,F1_mu,F1_sigma),gaussiana(soporte,F2_mu,F2_sigma),label_parzen+label_window_gauss,h[i])
+    if imprimir == 1:
+        output_filename = 'fig_b-' + label_imprimir + '.png'
+        fig_graf.savefig(output_filename,bbox_inches='tight')
 
+# ---- Clasificacion
+    label_estimacion = label_parzen+label_window_gauss
+    hacer_clasificacion(imprimir,pap_w1, p_F1, pap_w2, p_F2, sample_F1_test, sample_F2_test, soporte, h[i], label_estimacion, label_imprimir)
 
-#fig = plt.figure()
-#plt.plot(test_clase_1_F1,len(test_clase_1_F1)*[0],'bx',linewidth=1,label='clase F1')
-#plt.plot(test_clase_2_F1,len(test_clase_2_F1)*[0],'r.',linewidth=1,label='clase F2')
-#plt.plot(sample_F1_test,len(sample_F1_test)*[1],'bx',linewidth=1)#,label='Real F1')
-#plt.plot(test_clase_1_F2,len(test_clase_1_F2)*[3],'bx',linewidth=1)#,label='clase F1')
-#plt.plot(test_clase_2_F2,len(test_clase_2_F2)*[3],'r.',linewidth=1)#,label='clase F2')
-#plt.plot(sample_F2_test,len(sample_F2_test)*[4],'r.',linewidth=1)#,label='Real F2')
-#plt.title('Clasificación de '+str(n_test)+' muestras. Error de clasificación:\nClase F1='+str(error_clasif_F1)+', Clase F2='+str(error_clasif_F2) )#+label+str(h_k))
-#plt.grid()
-#plt.legend(loc='upper center', bbox_to_anchor=(0.5, -0.07), ncol=4)
-#plt.show()
 
 
 # PARZEN ---- Estimacion con ventana RECTANGULAR ------- PARZEN ------- PARZEN
-p_F1 = estimacion_parzen(sample_F1,soporte,h,0)
-p_F2 = estimacion_parzen(sample_F2,soporte,h,0)
+    p_F1 = estimacion_parzen(sample_F1,soporte,h[i],0,2) #el 2 no importa aca
+    p_F2 = estimacion_parzen(sample_F2,soporte,h[i],0,2)
 
-fig_graf = graf(soporte,p_F1,p_F2,gaussiana(soporte,F1_mu,F1_sigma),gaussiana(soporte,F2_mu,F2_sigma),label_parzen+label_window_rect,h)
-output_filename = 'fig_b-Parzen_winRect_h=' + str(h) + '.png'
-#fig_graf.savefig(output_filename,bbox_inches='tight')
+    fig_graf = graf(soporte,p_F1,p_F2,gaussiana(soporte,F1_mu,F1_sigma),gaussiana(soporte,F2_mu,F2_sigma),label_parzen+label_window_rect,h[i])
+    if imprimir == 1:
+        output_filename = 'fig_b-Parzen_winRect_h=' + str(h[i]) + '.png'
+        fig_graf.savefig(output_filename,bbox_inches='tight')
 
 # ---- Clasificacion
 # Utilizo las muestras de prueba para clasificar con las densidades estimadas
-test_clase_1_F1, test_clase_2_F1 = sep_clases(pap_w1, p_F1, pap_w2, p_F2, sample_F1_test,soporte)
-test_clase_1_F2, test_clase_2_F2 = sep_clases(pap_w1, p_F1, pap_w2, p_F2, sample_F2_test,soporte)
-error_clasif_F1 = len(test_clase_2_F1) / n_test
-error_clasif_F2 = len(test_clase_1_F2) / n_test
-
-label_title = str('Clasificación de ')+str(n_test)+str(' muestras usando las distribuciones estimadas.\n')+label_parzen+label_window_rect+str(h)+str('.\nError de clasificación: Clase F1=')+str(error_clasif_F1)+str(', Clase F2=')+str(error_clasif_F2)
-
-fig_graf = graf_puntos_clasif(sample_F1_test,sample_F2_test,test_clase_1_F1,test_clase_2_F1,test_clase_1_F2,test_clase_2_F2,label_title)
-#fig_graf = graf_puntos_clasif(sample_F1_test,sample_F2_test,test_clase_1_F1,test_clase_2_F1,test_clase_1_F2,test_clase_2_F2,n_test,error_clasif_F1,error_clasif_F2,label_parzen+label_window_rect,h)
-output_filename = 'fig_d-Muestras-Clasif-Parzen-winRect_h=' + str(h) + '.png'
-#fig_graf.savefig(output_filename,bbox_inches='tight')
-
+    label_estimacion = label_parzen+label_window_rect
+    label_imprimir = 'Parzen_winRect_h=' + str(h[i])
+    hacer_clasificacion(imprimir,pap_w1, p_F1, pap_w2, p_F2, sample_F1_test, sample_F2_test, soporte, h[i], label_estimacion, label_imprimir)
 
 
 
@@ -478,117 +449,44 @@ for i in range(len(k)):
     p_F1 = estimacion_kn(sample_F1,soporte,k[i])
     p_F2 = estimacion_kn(sample_F2,soporte,k[i])
     fig_graf = graf(soporte,p_F1,p_F2,gaussiana(soporte,F1_mu,F1_sigma),gaussiana(soporte,F2_mu,F2_sigma),label_kn,k[i])
-    output_filename = 'fig_c-KnVecinos_k=' + str(k[i]) + '.png'
-#    fig_graf.savefig(output_filename,bbox_inches='tight')
+    if imprimir == 1:
+        output_filename = 'fig_c-KnVecinos_k=' + str(k[i]) + '.png'
+        fig_graf.savefig(output_filename,bbox_inches='tight')
     
     # ---- Clasificacion
-    # Utilizo las muestras de prueba para clasificar con las densidades estimadas
-    test_clase_1_F1, test_clase_2_F1 = sep_clases(pap_w1, p_F1, pap_w2, p_F2, sample_F1_test,soporte)
-    test_clase_1_F2, test_clase_2_F2 = sep_clases(pap_w1, p_F1, pap_w2, p_F2, sample_F2_test,soporte)
-    error_clasif_F1 = len(test_clase_2_F1) / n_test
-    error_clasif_F2 = len(test_clase_1_F2) / n_test
-
-    label_title = str('Clasificación de ')+str(n_test)+str(' muestras usando las distribuciones estimadas.\n')+label_parzen+label_window_gauss+str(k[i])+str('.\nError de clasificación: Clase F1=')+str(error_clasif_F1)+str(', Clase F2=')+str(error_clasif_F2)
-
-    fig_graf = graf_puntos_clasif(sample_F1_test,sample_F2_test,test_clase_1_F1,test_clase_2_F1,test_clase_1_F2,test_clase_2_F2,label_title)
-
-#    fig_graf = graf_puntos_clasif(sample_F1_test,sample_F2_test,test_clase_1_F1,test_clase_2_F1,test_clase_1_F2,test_clase_2_F2,n_test,error_clasif_F1,error_clasif_F2,label_kn,k[i])
-    output_filename = 'fig_d-Muestras-Clasif-Kn_vecinos_k=' + str(k[i]) + '.png'
-#    fig_graf.savefig(output_filename,bbox_inches='tight')
+    # Utilizo las muestras de prueba para clasificar con las densidades estimadas  
+    label_imprimir = 'Kn_vecinos_k='+ str(k[i])
+    hacer_clasificacion(imprimir,pap_w1, p_F1, pap_w2, p_F2, sample_F1_test, sample_F2_test, soporte, h[i], label_kn, label_imprimir)
 
 
 
-# ---- Clasificacion KNN
+# ---- Clasificacion KNN ----
 k=np.array([1,11,51])
 
 for i in range(len(k)):
     # ---- Clasificacion KNN
     # Utilizo las muestras de prueba para clasificar con las densidades estimadas
-    test_clase_1_F1, test_clase_2_F1 = sep_clases_KNN(sample_F1,sample_F2,sample_F1_test,k[i])
-    test_clase_1_F2, test_clase_2_F2 = sep_clases_KNN(sample_F1,sample_F2,sample_F2_test,k[i])
-    error_clasif_F1 = len(test_clase_2_F1) / n_test
-    error_clasif_F2 = len(test_clase_1_F2) / n_test
+    test_clase_1_F1, test_clase_2_F1 = sep_clases_KNN(sample_F1,sample_F2,sample_F1_test[:,0],k[i])
+    test_clase_1_F2, test_clase_2_F2 = sep_clases_KNN(sample_F1,sample_F2,sample_F2_test[:,0],k[i])
 
-    label_title = str('Clasificación de ')+str(n_test)+str(' muestras usando KNN k=')+str(k[i])+str('.\nError de clasificación: Clase F1=')+str(error_clasif_F1)+str(', Clase F2=')+str(error_clasif_F2)
+    muestra_1_clasif = sep_clases_agregar_col_KNN(sample_F1,sample_F2,sample_F1_test,k[i])
+    muestra_2_clasif = sep_clases_agregar_col_KNN(sample_F1,sample_F2,sample_F2_test,k[i])
+    
+    cant_miss_F1 = cant_miss(muestra_1_clasif)
+    cant_miss_F2 = cant_miss(muestra_2_clasif)
+    
+    error_clasif_F1  = cant_miss_F1 / len(muestra_1_clasif)
+    error_clasif_F2  = cant_miss_F2 / len(muestra_2_clasif)
 
-    fig_graf = graf_puntos_clasif_KNN(sample_F1_test,sample_F2_test,test_clase_1_F1,test_clase_2_F1,test_clase_1_F2,test_clase_2_F2,label_title)
+    error_clasif_F1 = round(error_clasif_F1, 4)
+    error_clasif_F2 = round(error_clasif_F2, 4)
 
-
-#    fig_graf = graf_puntos_clasif(sample_F1_test,sample_F2_test,test_clase_1_F1,test_clase_2_F1,test_clase_1_F2,test_clase_2_F2,n_test,error_clasif_F1,error_clasif_F2,label_kn,k[i])
-    output_filename = 'fig_e-Muestras-Clasif-KNN_k=' + str(k[i]) + '.png'
-#    fig_graf.savefig(output_filename,bbox_inches='tight')
-
-
-
-
-
-#fig_1=plt.figure(1)
-#plt.plot(soporte,p_F1,color='b',linestyle='dashed',linewidth=1.25,label='Parzen F1')
-#plt.plot(soporte,p_F2,color='r',linestyle='dashed',linewidth=1.1,label='Parzen F2')
-#plt.plot(soporte,gaussiana(soporte,F1_mu,F1_sigma),color='b',linestyle='solid',linewidth=1.25,label='Teórica F1')
-#plt.plot(soporte,gaussiana(soporte,F2_mu,F2_sigma),color='r',linestyle='solid',linewidth=1.1,label='Teórica F2')
-#plt.xlabel('soporte')
-#plt.ylabel('pdf estimada')
-#plt.title('Comparación entre distribución teórica y estimada')
-#plt.grid()
-#plt.legend()
-#plt.show()
-#fig_1.savefig(out_filename_parzen,bbox_inches='tight')
+    label_title = str('Clasificación de ')+str(n_test)+str(' muestras usando KNN, k=')+str(k[i])+str('.\nError de clasificación: Clase F1=')+str(error_clasif_F1)+str(', Clase F2=')+str(error_clasif_F2)
+    fig_graf = graf_puntos_clasif(sample_F1_test[:,0],sample_F2_test[:,0],test_clase_1_F1,test_clase_2_F1,test_clase_1_F2,test_clase_2_F2,label_title)
+    if imprimir == 1:
+        output_filename = 'fig_e-Muestras-Clasif-KNN_k=' + str(k[i]) + '.png'
+        fig_graf.savefig(output_filename,bbox_inches='tight')
+        
+        
 
 
-
-#p = estimacion_parzen(sample,soporte,h)
-#p_cristina = parzen_estimate(sample,soporte,h)
-
-
-#graf_test(soporte,p_F1)
-#graf_test_2(soporte,p,p_cristina)
-#graficar(soporte,p,soporte,gaussiana(soporte,mu,sigma))
-
-
-#########
-
-#h = math.ceil(np.sqrt(len(y)))
-
-#z = gaussiana(x,mu,sigma)
-
-#graf_test(x,z)
-#graf_test(x,gaussiana(x,mu,sigma))
-
-#p = estimacion(y,x,h)
-#graficar(x, p, x, z)
-
-#graf_test(x,p)
-
-
-
-
-# Ejemplo ej clase Jonas
-#D = np.array([2,3,4,8,10,11,12])
-
-#h = math.ceil(np.sqrt(len(D)))
-#x = np.arange(0,14, step=1)
-#p_estimada = estimacion_parzen(D,x,h)
-#p_cris = parzen_estimate(D,x,h)
-
-#fig_1 = plt.figure(1)
-#plt.plot(x,p_estimada,color='darkorange',linestyle='dashed',linewidth=1,label='PARZEN')
-#plt.bar(x, p_estimada,color='tab:orange',alpha = 0.4,align='center')
-#plt.xlabel('x')
-#plt.ylabel('p estimada')
-#plt.xticks(x) 
-#plt.grid()
-#plt.legend()
-#plt.show()
-
-#fig_2 = plt.figure(2)
-#plt.plot(x,p_cris,color='darkorange',linestyle='dashed',linewidth=1,label='PARZEN CRIS')
-#plt.bar(x, p_cris,color='tab:orange',alpha = 0.4,align='center')
-#plt.xlabel('x')
-#plt.ylabel('p estimada')
-#plt.xticks(x) 
-#plt.grid()
-#plt.legend()
-#plt.show()
-
-#f = open("TP_resultados.txt", "w") # Voy a imprimirlo en un archivo        
