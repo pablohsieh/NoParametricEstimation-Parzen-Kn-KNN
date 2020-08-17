@@ -431,12 +431,17 @@ fig_graf = graf_gaussianas(soporte,gaussiana(soporte,F1_mu,F1_sigma),
 #    fig_graf.savefig('fig_0-gaussianas_boundary.png',bbox_inches='tight')
 
 #obtencion del error teorico
-error_x_dadoF1 = p_error(-np.inf,bound,F1_mu,np.sqrt(F1_sigma))
-error_F1 = error_x_dadoF1[0] * pap_w1
-print(round(error_F1,6)) #Esto es el error de clasificar la muestra como w2 cuando era w1
-error_x_dadoF2 = p_error(bound,np.inf,F2_mu,np.sqrt(F2_sigma))
-error_F2 = error_x_dadoF2[0] * pap_w2
-print(round(error_F2,6)) #Error de clasificar como w1 cuando era w2
+error_x_F1 = p_error(bound,np.inf,F1_mu,np.sqrt(F1_sigma))
+#print('p(x>x_B|w1)=',round(error_x_F1[0],6))
+error_F1 = error_x_F1[0] * pap_w1
+#print('p(x>x_B|w1)*P(w1)=',round(error_F1,6)) #Esto es el error de clasificar la muestra como w2 cuando era w1
+error_x_F2 = p_error(-np.inf,bound,F2_mu,np.sqrt(F2_sigma))
+#print('p(x<x_B|w2)=',round(error_x_F2[0],6))
+error_F2 = error_x_F2[0] * pap_w2
+#print('p(x<x_B|w2)*P(w2)=',round(error_F2,6)) #Error de clasificar como w1 cuando era w2
+error_total_teo = error_F1 + error_F2
+print('P(error)=',round(error_total_teo,6))
+
 
 fig_graf = graf_histograma(sample_F1,label_F1,sample_F2,label_F2,n,F1_mu,F2_mu)
 if imprimir == 1:
