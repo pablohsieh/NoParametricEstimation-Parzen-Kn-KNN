@@ -92,6 +92,30 @@ def estimacion_kn(muestras,soporte,k):
         return p_hat
 
 
+# obtencion de la region de desicion con las densidades estimadas ------------
+
+def decision_bound(soport,p_estimada_a,pap_a,p_estimada_b,pap_b):
+# analizo punto a punto en el soporte la diferencia entre discriinantes, 
+# luego devuelvo el x con menor diferencia como boundary x_B
+# la region teorica dio aprox en  x_B = 2, 
+# entonces la estimada deberia estar cerca, digo que entre -5 y 10, 
+# como el paso es de a 0.1: -15 = 0 y 20 = 350 => indice = x*10 + 150
+    x_inf = -5
+    x_sup = 10
+    inf = x_inf * 10 + 150
+    sup = x_sup * 10 + 150
+    p_estimada_a = p_estimada_a[inf:sup]
+    p_estimada_b = p_estimada_b[inf:sup]
+    discrim_a = np.log(p_estimada_a) + np.log(pap_a)
+    discrim_b = np.log(p_estimada_b) + np.log(pap_b)
+    
+    diferencia_ab = abs(discrim_a - discrim_b)
+    index_min = np.argmax(diferencia_ab)
+    
+    bound = soport[index_min]            
+    return bound
+
+
 # Funcion que devuelve la imagen en x ---------------------------------------
 def f(dominio,imagen,x):
 #se modela que la imagen vale lo mismo desde dominio-delta hasta dominio+delta
@@ -221,7 +245,7 @@ def cant_miss(muestra):
 
 def hacer_clasificacion(imprimir, papw1, pF1, papw2, pF2, 
                         sample_F1test, sample_F2test, soport, h_k, 
-                        label_estimacion,label_impresion,bound):
+                        label_estimacion,label_impresion,bound_t,bound_e):
 # ---- Clasificacion
 # Utilizo las muestras de prueba para clasificar con las densidades estimadas 
 # Se separan las muestras clasificandolas
@@ -244,12 +268,12 @@ def hacer_clasificacion(imprimir, papw1, pF1, papw2, pF2,
     err_clasif_F1 = round(err_clasif_F1, 4) 
     err_clasif_F2 = round(err_clasif_F2, 4)
     
-    label_titulo = str('Clasificación de ')+str(n_test)+str(' muestras usando las distribuciones estimadas.\n')+label_estimacion+str(h_k)+str('.\nError de clasificación: Clase F1=')+str(err_clasif_F1)+str(', Clase F2=')+str(err_clasif_F2)
+    label_titulo = str('Clasificación de 100 muestras usando las distribuciones estimadas.\n')+label_estimacion+str(h_k)+str('.\nError de clasificación: Clase F1=')+str(err_clasif_F1)+str(', Clase F2=')+str(err_clasif_F2)
     
     fig_graf = graf_puntos_clasif(sample_F1test[:,0],sample_F2test[:,0],
                                   test_class_1_F1,test_class_2_F1,
                                   test_class_1_F2,test_class_2_F2,
-                                  label_titulo,bound)
+                                  label_titulo,bound_t,bound_e)
     if imprimir == 1:
         output_filename = 'fig_d-Muestras-Clasif-' + label_impresion + '.png'
         fig_graf.savefig(output_filename,bbox_inches='tight')
@@ -312,7 +336,7 @@ def graf(soporte,p_F1,p_F2,p_teo_F1,p_teo_F2,label,h_k):
     return fig
 
 def graf_puntos_clasif(real_F1,real_F2,clas1_F1,clas2_F1,clas1_F2,clas2_F2,
-                       label_title,bound): 
+                       label_title,bound_t,bound_e): 
 # Se grafican las muestras a clasificar y clasificadas
 # real_F1 y real_F2 son las muestras a clasificar provenientes de F1 y F2
 # Clas1_F1 son las muestras de F1 clasificadas como F1
@@ -320,27 +344,67 @@ def graf_puntos_clasif(real_F1,real_F2,clas1_F1,clas2_F1,clas1_F2,clas2_F2,
 # Clas1_F2 son las muestras de F2 clasificadas como F1
 # Clas2_F2 son las muestras de F2 clasificadas como F2
     fig = plt.figure()
+# Boundarteorica y estimada
+    plt.axvline(x=bound_t, color='k', linestyle='dashed',linewidth=1,
+                label = 'Región de desición teorica, x_BT='+str(round(bound_t,4)))
+    plt.axvline(x=bound_e, color='k', linestyle='dashdot',linewidth=1,
+                label = 'Región de desición estimada, x_Be='+str(round(bound_e,4)))
+# Recuadro del muestras    
+    plt.axhspan(-0.1, 0.1, alpha=0.15, color = 'b' ,
+                label = 'Clasificación de las provenientes de F1')
+    plt.axhspan(0.9, 1.1, alpha=0.15, color = 'r' ,
+                label = 'Clasificación de las provenientes de F2')
+    naranja = '#f5be58'
+    plt.axhspan(1.9, 2.1, alpha=0.35, color = naranja,
+                label = 'Muestras a clasificar') 
+# Datos
     plt.plot(clas1_F1,len(clas1_F1)*[0],'bx',linewidth=1,label='clase F1') 
     plt.plot(clas2_F1,len(clas2_F1)*[0],'r.',linewidth=1,label='clase F2')
     plt.plot(real_F1,len(real_F1)*[2],'bx',linewidth=1) 
     plt.plot(clas1_F2,len(clas1_F2)*[1],'bx',linewidth=1) 
     plt.plot(clas2_F2,len(clas2_F2)*[1],'r.',linewidth=1) 
     plt.plot(real_F2,len(real_F2)*[2],'r.',linewidth=1) 
-    plt.axvline(x=bound, color='k', linestyle='dashed',linewidth=1.2,
-                label = 'Región de desición, x_B='+str(round(bound,6)))
-# Recuadro del muestras
-    naranja = '#f5be58'
-    plt.axhspan(1.9, 2.1, alpha=0.35, color = naranja,
-                label = 'Muestras a clasificar')
-    plt.axhspan(-0.1, 0.1, alpha=0.15, color = 'b' ,
-                label = 'Clasificación de las provenientes de F1')
-    plt.axhspan(0.9, 1.1, alpha=0.15, color = 'r' ,
-                label = 'Clasificación de las provenientes de F2')
+
     plt.title(label_title)
     plt.grid()
     plt.legend(loc='upper center', bbox_to_anchor=(0.5, -0.07), ncol=2)
     plt.show()
     return fig
+
+def graf_puntos_clasif_KNN(real_F1,real_F2,clas1_F1,clas2_F1,clas1_F2,clas2_F2,
+                       label_title,bound_t): 
+# Se grafican las muestras a clasificar y clasificadas
+# real_F1 y real_F2 son las muestras a clasificar provenientes de F1 y F2
+# Clas1_F1 son las muestras de F1 clasificadas como F1
+# Clas2_F1 son las muestras de F1 clasificadas como F2
+# Clas1_F2 son las muestras de F2 clasificadas como F1
+# Clas2_F2 son las muestras de F2 clasificadas como F2
+    fig = plt.figure()
+# Boundary teorico y estimado
+    plt.axvline(x=bound_t, color='k', linestyle='dashed',linewidth=1,
+                label = 'Región de desición teorica, x_BT='+str(round(bound_t,4)))
+# Recuadro del muestras
+    plt.axhspan(-0.1, 0.1, alpha=0.15, color = 'b' ,
+                label = 'Clasificación de las provenientes de F1')
+    plt.axhspan(0.9, 1.1, alpha=0.15, color = 'r' ,
+                label = 'Clasificación de las provenientes de F2')
+    naranja = '#f5be58'
+    plt.axhspan(1.9, 2.1, alpha=0.35, color = naranja,
+                label = 'Muestras a clasificar')
+# Datos
+    plt.plot(clas1_F1,len(clas1_F1)*[0],'bx',linewidth=1,label='clase F1') 
+    plt.plot(clas2_F1,len(clas2_F1)*[0],'r.',linewidth=1,label='clase F2')
+    plt.plot(real_F1,len(real_F1)*[2],'bx',linewidth=1) 
+    plt.plot(clas1_F2,len(clas1_F2)*[1],'bx',linewidth=1) 
+    plt.plot(clas2_F2,len(clas2_F2)*[1],'r.',linewidth=1) 
+    plt.plot(real_F2,len(real_F2)*[2],'r.',linewidth=1) 
+
+    plt.title(label_title)
+    plt.grid()
+    plt.legend(loc='upper center', bbox_to_anchor=(0.5, -0.07), ncol=2)
+    plt.show()
+    return fig
+
 
 def graficar_ventanas(h):
 # Grafico las ventanas de parzen gaussiana con desvio h,h/2,h/4,h/8 
@@ -423,19 +487,19 @@ sample_F2_test = np.random.normal(F2_mu,F2_sigma,60) #genero con P(w2)=0.6
 sample_F1_test = agregar_clase(sample_F1_test,0) #La clase w1 -> columna de 0
 sample_F2_test = agregar_clase(sample_F2_test,1) #La clase w2 -> columna de 1
 
-bound = (np.log(pap_w2)-np.log(pap_w1)+1/8+2)*(4/5)
+bound_teo = (np.log(pap_w2)-np.log(pap_w1)+1/8+2)*(4/5)
 #bound = 2.024372
 fig_graf = graf_gaussianas(soporte,gaussiana(soporte,F1_mu,F1_sigma),
-                           gaussiana(soporte,F2_mu,F2_sigma),bound)
+                           gaussiana(soporte,F2_mu,F2_sigma),bound_teo)
 #if imprimir == 1:
 #    fig_graf.savefig('fig_0-gaussianas_boundary.png',bbox_inches='tight')
 
 #obtencion del error teorico
-error_x_F1 = p_error(bound,np.inf,F1_mu,np.sqrt(F1_sigma))
+error_x_F1 = p_error(bound_teo,np.inf,F1_mu,np.sqrt(F1_sigma))
 #print('p(x>x_B|w1)=',round(error_x_F1[0],6))
 error_F1 = error_x_F1[0] * pap_w1
 #print('p(x>x_B|w1)*P(w1)=',round(error_F1,6)) #Esto es el error de clasificar la muestra como w2 cuando era w1
-error_x_F2 = p_error(-np.inf,bound,F2_mu,np.sqrt(F2_sigma))
+error_x_F2 = p_error(-np.inf,bound_teo,F2_mu,np.sqrt(F2_sigma))
 #print('p(x<x_B|w2)=',round(error_x_F2[0],6))
 error_F2 = error_x_F2[0] * pap_w2
 #print('p(x<x_B|w2)*P(w2)=',round(error_F2,6)) #Error de clasificar como w1 cuando era w2
@@ -473,10 +537,11 @@ for i in range(len(h)):
         fig_graf.savefig(output_filename,bbox_inches='tight')
         
 # ---- Clasificacion
+    bound_est = decision_bound(soporte,p_F1,pap_w1,p_F2,pap_w2)
     label_estimacion = label_parzen+label_window_gauss
     hacer_clasificacion(imprimir,pap_w1, p_F1, pap_w2, p_F2, 
                         sample_F1_test, sample_F2_test, soporte, h[i], 
-                        label_estimacion, label_imprimir,bound)
+                        label_estimacion, label_imprimir,bound_teo,bound_est)
 
 
 ## Se analizaron los resultados y se vio que lo mejor es sigma = h/6
@@ -496,8 +561,9 @@ for i in range(len(h)):
 
 # ---- Clasificacion
 # Utilizo las muestras de prueba para clasificar con las densidades estimadas
+#    bound_est = decision_bound(soporte,p_F1,pap_w1,p_F2,pap_w2)
 #    label_estimacion = label_parzen+label_window_gauss
-#    hacer_clasificacion(imprimir,pap_w1, p_F1, pap_w2, p_F2, sample_F1_test, sample_F2_test, soporte, h[i], label_estimacion, label_imprimir,bound)
+#    hacer_clasificacion(imprimir,pap_w1, p_F1, pap_w2, p_F2, sample_F1_test, sample_F2_test, soporte, h[i], label_estimacion, label_imprimir,bound_teo,bound_est)
 
 ##### sigma = h/4
 #    label_window_gauss = str(', Gaussiana(0,(h/4)^2) h=')
@@ -512,8 +578,9 @@ for i in range(len(h)):
 #        fig_graf.savefig(output_filename,bbox_inches='tight')
         
 # ---- Clasificacion
+#    bound_est = decision_bound(soporte,p_F1,pap_w1,p_F2,pap_w2)
 #    label_estimacion = label_parzen+label_window_gauss
-#    hacer_clasificacion(imprimir,pap_w1, p_F1, pap_w2, p_F2, sample_F1_test, sample_F2_test, soporte, h[i], label_estimacion, label_imprimir, bound)
+#    hacer_clasificacion(imprimir,pap_w1, p_F1, pap_w2, p_F2, sample_F1_test, sample_F2_test, soporte, h[i], label_estimacion, label_imprimir,bound_teo,bound_est)
 
 
 ##### sigma = h/8
@@ -529,8 +596,9 @@ for i in range(len(h)):
 #        fig_graf.savefig(output_filename,bbox_inches='tight')
 
 # ---- Clasificacion
+#    bound_est = decision_bound(soporte,p_F1,pap_w1,p_F2,pap_w2)
 #    label_estimacion = label_parzen+label_window_gauss
-#    hacer_clasificacion(imprimir,pap_w1, p_F1, pap_w2, p_F2, sample_F1_test, sample_F2_test, soporte, h[i], label_estimacion, label_imprimir, bound)
+#    hacer_clasificacion(imprimir,pap_w1, p_F1, pap_w2, p_F2, sample_F1_test, sample_F2_test, soporte, h[i], label_estimacion, label_imprimir,bound_teo,bound_est)
 
 
 
@@ -547,11 +615,12 @@ for i in range(len(h)):
 
 # ---- Clasificacion
 # Utilizo las muestras de prueba para clasificar con las densidades estimadas
+    bound_est = decision_bound(soporte,p_F1,pap_w1,p_F2,pap_w2)
     label_estimacion = label_parzen+label_window_rect
     label_imprimir = 'Parzen_winRect_h=' + str(h[i])
     hacer_clasificacion(imprimir, pap_w1, p_F1, pap_w2, p_F2,
                         sample_F1_test, sample_F2_test, soporte, h[i],
-                        label_estimacion, label_imprimir, bound)
+                        label_estimacion, label_imprimir, bound_teo, bound_est)
 
 
 # Kn ---- Estimacion con k vecinos ---- Kn ---- Kn ---- Kn ---- Kn ---- Kn ---
@@ -569,11 +638,12 @@ for i in range(len(k)):
         fig_graf.savefig(output_filename,bbox_inches='tight')
     
 # ---- Clasificacion
-# Utilizo las muestras de prueba para clasificar con las densidades estimadas  
+# Utilizo las muestras de prueba para clasificar con las densidades estimadas
+    bound_est = decision_bound(soporte,p_F1,pap_w1,p_F2,pap_w2)  
     label_imprimir = 'Kn_vecinos_k='+ str(k[i])
     hacer_clasificacion(imprimir,pap_w1, p_F1, pap_w2, p_F2, 
                         sample_F1_test, sample_F2_test, soporte, k[i], 
-                        label_kn, label_imprimir, bound)
+                        label_kn, label_imprimir, bound_teo, bound_est)
 
 
 
@@ -603,10 +673,10 @@ for i in range(len(k)):
     error_clasif_F2 = round(error_clasif_F2, 4)
 
     label_title = str('Clasificación de ')+str(n_test)+str(' muestras usando KNN, k=')+str(k[i])+str('.\nError de clasificación: Clase F1=')+str(error_clasif_F1)+str(', Clase F2=')+str(error_clasif_F2)
-    fig_graf = graf_puntos_clasif(sample_F1_test[:,0],sample_F2_test[:,0],
+    fig_graf = graf_puntos_clasif_KNN(sample_F1_test[:,0],sample_F2_test[:,0],
                                   test_clase_1_F1,test_clase_2_F1,
                                   test_clase_1_F2,test_clase_2_F2,label_title,
-                                  bound)
+                                  bound_teo)
     if imprimir == 1:
         output_filename = 'fig_e-Muestras-Clasif-KNN_k=' + str(k[i]) + '.png'
         fig_graf.savefig(output_filename,bbox_inches='tight')
