@@ -350,16 +350,17 @@ def graf_puntos_clasif(real_F1,real_F2,clas1_F1,clas2_F1,clas1_F2,clas2_F2,
     plt.axvline(x=bound_e, color='k', linestyle='dashdot',linewidth=1,
                 label = 'Región de desición estimada, x_Be='+str(round(bound_e,4)))
 # Recuadro del muestras    
+    naranja = '#f5be58'
+    plt.axhspan(1.9, 2.1, alpha=0.35, color = naranja,
+                label = 'Muestras a clasificar') 
     plt.axhspan(-0.1, 0.1, alpha=0.15, color = 'b' ,
                 label = 'Clasificación de las provenientes de F1')
     plt.axhspan(0.9, 1.1, alpha=0.15, color = 'r' ,
                 label = 'Clasificación de las provenientes de F2')
-    naranja = '#f5be58'
-    plt.axhspan(1.9, 2.1, alpha=0.35, color = naranja,
-                label = 'Muestras a clasificar') 
 # Datos
     plt.plot(clas1_F1,len(clas1_F1)*[0],'bx',linewidth=1,label='clase F1') 
     plt.plot(clas2_F1,len(clas2_F1)*[0],'r.',linewidth=1,label='clase F2')
+
     plt.plot(real_F1,len(real_F1)*[2],'bx',linewidth=1) 
     plt.plot(clas1_F2,len(clas1_F2)*[1],'bx',linewidth=1) 
     plt.plot(clas2_F2,len(clas2_F2)*[1],'r.',linewidth=1) 
@@ -367,7 +368,7 @@ def graf_puntos_clasif(real_F1,real_F2,clas1_F1,clas2_F1,clas1_F2,clas2_F2,
 
     plt.title(label_title)
     plt.grid()
-    plt.legend(loc='upper center', bbox_to_anchor=(0.5, -0.07), ncol=2)
+    plt.legend(loc='upper center', bbox_to_anchor=(0.5, -0.07), ncol=1)
     plt.show()
     return fig
 
@@ -384,13 +385,13 @@ def graf_puntos_clasif_KNN(real_F1,real_F2,clas1_F1,clas2_F1,clas1_F2,clas2_F2,
     plt.axvline(x=bound_t, color='k', linestyle='dashed',linewidth=1,
                 label = 'Región de desición teorica, x_BT='+str(round(bound_t,4)))
 # Recuadro del muestras
+    naranja = '#f5be58'
+    plt.axhspan(1.9, 2.1, alpha=0.35, color = naranja,
+                label = 'Muestras a clasificar')
     plt.axhspan(-0.1, 0.1, alpha=0.15, color = 'b' ,
                 label = 'Clasificación de las provenientes de F1')
     plt.axhspan(0.9, 1.1, alpha=0.15, color = 'r' ,
                 label = 'Clasificación de las provenientes de F2')
-    naranja = '#f5be58'
-    plt.axhspan(1.9, 2.1, alpha=0.35, color = naranja,
-                label = 'Muestras a clasificar')
 # Datos
     plt.plot(clas1_F1,len(clas1_F1)*[0],'bx',linewidth=1,label='clase F1') 
     plt.plot(clas2_F1,len(clas2_F1)*[0],'r.',linewidth=1,label='clase F2')
@@ -401,7 +402,7 @@ def graf_puntos_clasif_KNN(real_F1,real_F2,clas1_F1,clas2_F1,clas1_F2,clas2_F2,
 
     plt.title(label_title)
     plt.grid()
-    plt.legend(loc='upper center', bbox_to_anchor=(0.5, -0.07), ncol=2)
+    plt.legend(loc='upper center', bbox_to_anchor=(0.5, -0.07), ncol=1)
     plt.show()
     return fig
 
@@ -461,7 +462,7 @@ n=10**4  #cantidad de muestras de entrenamiento
 n_test=10**2  #cantidad de muestras a clasificar
 
 # Para imprimir o exportar las figuras obtenidas: imprimir = 1, sino 0
-imprimir = 1
+imprimir = 0
 
 # Grafico las ventanas dependiendo del desvio, h=1 para posterior analisis
 #fig_graf = graficar_ventanas(1)
